@@ -7,7 +7,6 @@ const config = require('./config/config.json');
 let commands = {
     "join": config.cmdprefix + "join",
     "leave": config.cmdprefix + "leave",
-    "almond": config.cmdprefix + "almond",
     "shutdown": config.cmdprefix + "shutdown",
     "restart": config.cmdprefix + "restart"
 }
@@ -47,26 +46,6 @@ client.on('message', msg => {
         }
     }
 
-    // Almond inside joke
-    else if (msg.content.startsWith(commands.almond)) {
-        if (almondUse >= almondCooldown) {
-            if (client.uptime >= currentTime + 5000) {
-                almondUse = 1;
-                msg.channel.send({
-                    files: ['https://i.imgur.com/VHK8kLo.jpg']
-                });
-            } else {
-                msg.channel.sendMessage("One must not summon Almond Man too often, else make him angry.");
-            }
-        } else {
-            msg.channel.send({
-                files: ['https://i.imgur.com/VHK8kLo.jpg']
-            });
-            almondUse++
-            currentTime = client.uptime;
-        }
-    }
-
     // Shutdown bot
     else if (msg.content.startsWith(commands.shutdown)) {
         console.log("Shutdown request received.");
@@ -83,10 +62,5 @@ client.on('message', msg => {
         });
     }
 });
-
-let almondCooldown = 3;
-let almondUse = 0;
-let currentTime;
-console.log(apis.discord);
 
 client.login(apis.discord);
