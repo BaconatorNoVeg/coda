@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/BaconatorNoVeg/coda/issues"
   },
-  "homepage": "https://github.com/BaconatorNoVeg/coda#readme"
+  "homepage": "https://github.com/BaconatorNoVeg/coda#readme",
+  "dependencies": {
+    "youtube-dl": "^2.0.0"
+  }
 }
