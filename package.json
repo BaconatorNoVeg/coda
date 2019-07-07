@@ -17,6 +17,8 @@
   },
   "homepage": "https://github.com/BaconatorNoVeg/coda#readme",
   "dependencies": {
+    "discord.js": "^11.5.1",
+    "node-opus": "^0.3.2",
     "youtube-dl": "^2.0.0"
   }
 }

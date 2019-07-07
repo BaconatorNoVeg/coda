@@ -1,3 +1,4 @@
 {
-    "cmdprefix": "/"
+    "cmdprefix": "/",
+    "audioVolume": 0.25
 }
