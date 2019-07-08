@@ -1,5 +1,7 @@
 const Discord = require('discord.js');
 const youtubedl = require('youtube-dl');
+const request = require('request');
+const crypto = require('crypto');
 const fs = require('fs');
 const client = new Discord.Client();
 const apis = require('./config/apis.json');
@@ -7,6 +9,10 @@ const config = require('./config/config.json');
 let dispatcher;
 let audioPlaying = false;
 let vidQueue = [];
+
+if (!fs.existsSync('./cache')) {
+    fs.mkdirSync('./cache');
+}
 
 let commands = {
     "join": config.cmdprefix + "join",
@@ -54,16 +60,21 @@ client.on('message', msg => {
         }
     }
 
-    // Play music from YouTube
+    // Play music
     else if (msg.content.startsWith(commands.play)) {
-        if (msg.content.length <= commands.play) {
-            // TODO: Handle invalid command
+        if (msg.content.length <= commands.play.length) {
+            if (msg.attachments.array().length > 0) {
+                // msg.channel.send("I can't play audio attachments yet.");
+                queueVideo(msg.attachments.first().url, msg, true);
+            } else {
+                // TODO: Handle invalid command
+            }
         } else {
             let ytlink = msg.content.split(" ")[1];
             if (!ytlink.startsWith("https://www.youtube.com/watch?v=") && !ytlink.startsWith("https://youtu.be/")) {
                 // TODO: Handle invalid link
             } else {
-                queueVideo(ytlink, msg);
+                queueVideo(ytlink, msg, false);
             }
         }
     }
@@ -105,9 +116,7 @@ client.on('message', msg => {
 
     // Delete messages containing commands
     if (msg.content.startsWith(config.cmdprefix)) {
-        msg.delete().then(msg => {
-
-        }).catch(console.error);
+        //msg.delete().then(msg => {}).catch(console.error);
     }
 });
 
@@ -117,11 +126,16 @@ function playVideo(videoData) {
         voiceChnl.join().then(connection => {
             audioPlaying = true;
             sendNowPlayingEmbed(videoData);
-            dispatcher = connection.playStream(videoData.audiostream, {volume: config.audioVolume});
+            if (videoData.title === "Uploaded audio") {
+                console.log("local");
+                dispatcher = connection.playFile(videoData.audiostream, {volume: 0.5});
+            } else {
+                dispatcher = connection.playStream(videoData.audiostream, {volume: config.audioVolume});
+            }
             client.user.setActivity(videoData.title);
             dispatcher.on("end", () => {
                 if (queueEmpty()) {
-                    videoData.channel.send("Queue is empty. Disconnecting.");
+                    videoData.responseChannel.send("Queue is empty. Disconnecting.");
                     voiceChnl.leave();
                     client.user.setActivity("");
                     audioPlaying = false;
@@ -130,7 +144,7 @@ function playVideo(videoData) {
                     playVideo(nextVideo);
                 }
             })
-        })
+        }).catch(console.error);
     }
     
     // let video = youtubedl(link, ['-x', '--audio-format', 'mp3']);
@@ -162,35 +176,64 @@ function queueEmpty() {
     return vidQueue.length <= 0;
 }
 
-function queueVideo(link, msg) {
+function queueVideo(link, msg, local) {
     // vidQueue.push(link);
-    youtubedl.getInfo(link, function(err, data) {
-        let streamData = youtubedl(link, ['-x', '--audio-format', 'mp3']);
-        let queuer = "";
-        if (msg.member.nickname != null) {
-            queuer = msg.member.nickname;
-        } else {
-            queuer = msg.author.username;
-        }
-        let videoData = {
-            "audiostream": streamData,
-            "title": data.title,
-            "uploader": data.uploader,
-            "length": data._duration_hms,
-            "thumbnail": data.thumbnail,
-            "url": data.webpage_url,
-            "queuer": queuer,
-            "queuerAvatar": msg.member.user.avatarURL,
-            "responseChannel": msg.channel,
-            "voiceChannel": msg.member.voiceChannel
-        }
-        if (!audioPlaying) {
-            playVideo(videoData);
-        } else {
+    if (!local) {
+        youtubedl.getInfo(link, function(err, data) {
+            let streamData = youtubedl(link, ['-x', '--audio-format', 'mp3']);
+            let queuer = "";
+            if (msg.member.nickname != null) {
+                queuer = msg.member.nickname;
+            } else {
+                queuer = msg.author.username;
+            }
+            let videoData = {
+                "audiostream": streamData,
+                "title": data.title,
+                "uploader": data.uploader,
+                "length": data._duration_hms,
+                "thumbnail": data.thumbnail,
+                "url": data.webpage_url,
+                "queuer": queuer,
+                "queuerAvatar": msg.member.user.avatarURL,
+                "responseChannel": msg.channel,
+                "voiceChannel": msg.member.voiceChannel
+            }
+            if (!audioPlaying) {
+                playVideo(videoData);
+            } else {
+                vidQueue.push(videoData);
+                sendQueueEmbed(videoData)
+            }
+        });
+    } else {
+        let name = './cache/' + client.uptime;
+            request(link).pipe(fs.createWriteStream(name));
+            let queuer = "";
+            if (msg.member.nickname != null) {
+                queuer = msg.member.nickname;
+            } else {
+                queuer = msg.author.username;
+            }
+            let videoData = {
+                "audiostream": name,
+                "title": "Uploaded audio",
+                "uploader": undefined,
+                "length": undefined,
+                "thumbnail": undefined,
+                "url": undefined,
+                "queuer": queuer,
+                "queuerAvatar": msg.member.user.avatarURL,
+                "responseChannel": msg.channel,
+                "voiceChannel": msg.member.voiceChannel
+            }
+            if (!audioPlaying) {
+                playVideo(videoData);
+            } else {
             vidQueue.push(videoData);
             sendQueueEmbed(videoData)
-        }
-    });
+            }
+    }
 }
 
 function sendQueueEmbed(data) {
