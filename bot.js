@@ -1,11 +1,17 @@
 const Discord = require('discord.js');
 const youtubedl = require('youtube-dl');
+const ytsearch = require('youtube-search');
 const request = require('request');
 const crypto = require('crypto');
 const fs = require('fs');
 const client = new Discord.Client();
 const apis = require('./config/apis.json');
 const config = require('./config/config.json');
+const ytsearchopts = {
+    maxResults: 1,
+    key: apis.youtube
+}
+let loadingmsg = [];
 let dispatcher;
 let audioPlaying = false;
 let vidQueue = [];
@@ -66,15 +72,22 @@ client.on('message', msg => {
     else if (msg.content.startsWith(commands.play)) {
         if (msg.content.length <= commands.play.length) {
             if (msg.attachments.array().length > 0) {
-                // msg.channel.send("I can't play audio attachments yet.");
                 queueVideo(msg.attachments.first().url, msg, true);
             } else {
                 // TODO: Handle invalid command
             }
         } else {
-            let ytlink = msg.content.split(" ")[1];
+            notifyProcessing(msg.channel);
+            let ytlink = msg.content.substring(commands.play.length + 1);
             if (!ytlink.startsWith("https://www.youtube.com/watch?v=") && !ytlink.startsWith("https://youtu.be/")) {
-                // TODO: Handle invalid link
+                let newQuery = ytlink;
+                if (newQuery.startsWith("http")) {
+                    // TODO: Handle invalid link
+                } else { // Search YouTube
+                    searchYoutube(newQuery, msg, function(link) {
+                        queueVideo(link, msg, false);
+                    });
+                }
             } else {
                 queueVideo(ytlink, msg, false);
             }
@@ -128,10 +141,18 @@ client.on('message', msg => {
     }
 
     // Delete messages containing commands
-    if (msg.content.startsWith(config.cmdprefix) && msg.attachments.array().length == 0) {
-        msg.delete().then(msg => {}).catch(console.error);
-    }
+    // if (msg.content.startsWith(config.cmdprefix) && msg.attachments.array().length == 0) {
+    //     msg.delete().then(msg => {}).catch(console.error);
+    // }
 });
+
+function searchYoutube(query, msg, cb) {
+    console.log("YouTube search query was '" + query + "'");
+    ytsearch(query, ytsearchopts, function (err, results) {
+        if (err) return console.log(err);
+        cb(results[0].link);
+    })
+}
 
 function playVideo(videoData) {
     let voiceChnl = videoData.voiceChannel;
@@ -195,6 +216,7 @@ function queueVideo(link, msg, local) {
                         "responseChannel": msg.channel,
                         "voiceChannel": msg.member.voiceChannel
                     }
+                    stopNotifyProcessing();
                     if (!audioPlaying) {
                         playVideo(videoData);
                     } else {
@@ -285,6 +307,14 @@ function decodeBase64AudioStream(base64AudioStream, cb) {
     s.push(binaryData);
     s.push(null);
     cb(s);
+}
+
+function notifyProcessing(channel) {
+    channel.send("Processing...").then(msg => loadingmsg.push(msg));
+}
+
+function stopNotifyProcessing() {
+    loadingmsg.shift().delete();
 }
 
 function resetSelf(guild) {

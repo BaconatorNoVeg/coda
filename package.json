@@ -22,6 +22,7 @@
     "mv": "^2.1.1",
     "node-opus": "^0.3.2",
     "request": "^2.88.0",
-    "youtube-dl": "^2.0.0"
+    "youtube-dl": "^2.0.0",
+    "youtube-search": "^1.1.4"
   }
 }
