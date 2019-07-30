@@ -425,7 +425,7 @@ function queuePlaylist(linksarray, msg, echofull = true) {
     }
 
     // If the queue is full, wait 15 seconds to see if a slot frees up, then try again
-    else if (vidQueue.length >= 15) {
+    else if (vidQueue.length >= config.maxQueueSize) {
         if (echofull) console.log("Queue is full, checking every 5 seconds for a free slot.");
         setTimeout(queuePlaylist, 5000, linksarray, msg, false);
     }
