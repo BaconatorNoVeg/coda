@@ -1,4 +1,5 @@
 {
     "cmdprefix": "/",
-    "audioVolume": 0.25
+    "audioVolume": 0.5,
+    "maxQueueSize": 15
 }
