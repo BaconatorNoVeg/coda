@@ -17,11 +17,17 @@
   },
   "homepage": "https://github.com/BaconatorNoVeg/coda#readme",
   "dependencies": {
+    "bufferutil": "^4.0.1",
     "discord.js": "^11.5.1",
+    "erlpack": "github:hammerandchisel/erlpack",
+    "get-youtube-id": "^1.0.1",
     "jsmediatags": "^3.9.2",
+    "libsodium-wrappers": "^0.7.5",
     "mv": "^2.1.1",
     "node-opus": "^0.3.2",
     "request": "^2.88.0",
+    "shuffle-array": "^1.0.1",
+    "simple-youtube-api": "^5.2.1",
     "youtube-dl": "^2.0.0",
     "youtube-search": "^1.1.4"
   }
