@@ -48,10 +48,9 @@ client.on('ready', () => {
     fs.readFile('./config/statuses.txt', function(err, data) {
         if (err) throw err;
         statuses = data.toString().split("\n");
-        console.log(statuses);
+        resetSelf();
     });
     console.log('Logged in');
-    resetSelf();
     if (config.devMode) {
         console.log("Bot running in development mode!");
         client.user.setStatus('dnd');
