@@ -17,6 +17,7 @@ let loadingmsg = [];
 let stopRequest = false;
 let dispatcher;
 let audioPlaying = false;
+let statuses = [];
 let playlistStatus = {
     "downloading": false,
     "remaining": 0
@@ -29,6 +30,7 @@ if (!fs.existsSync('./cache')) {
 }
 
 let commands = {
+    "help": config.cmdprefix + "help",
     "join": config.cmdprefix + "join",
     "leave": config.cmdprefix + "leave",
     "playlist": config.cmdprefix + "playlist",
@@ -38,11 +40,22 @@ let commands = {
     "skip": config.cmdprefix + "skip",
     "shutdown": config.cmdprefix + "shutdown",
     "restart": config.cmdprefix + "restart",
+    "resetstatus": config.cmdprefix + "resetstatus",
     "dumpqueue": config.cmdprefix + "dumpqueue"
 }
 
 client.on('ready', () => {
+    fs.readFile('./config/statuses.txt', function(err, data) {
+        if (err) throw err;
+        statuses = data.toString().split("\n");
+        console.log(statuses);
+    });
     console.log('Logged in');
+    resetSelf();
+    if (config.devMode) {
+        console.log("Bot running in development mode!");
+        client.user.setStatus('dnd');
+    }
     let guilds = client.guilds.keyArray();
     if (!fs.existsSync('./data')) {
         fs.mkdirSync('./data');
@@ -62,10 +75,26 @@ client.on('message', msg => {
     let datadir = "./data/" + msg.guild.id + "/";
     let cachedir = "./cache/" + msg.guild.id + "/";
 
+    if (msg.member === null) {
+        return;
+    }
+
     let voiceChnl = msg.member.voiceChannel;
 
+    if (msg.content.startsWith(config.cmdprefix) && config.devMode) {
+        msg.reply("The bot is currently in development mode. Some things may or may not break.");
+    }
+
+    // Help information
+    if (msg.content.startsWith(commands.help)) {
+        let args = msg.content.split(" ");
+        if (args[1] === undefined) {
+            msg.channel.send("```\nCommand Usage:\n\n" + commands.help + " <other command> : Get help for another command.\n```");
+        }
+    }
+
     // Join voice channel
-    if (msg.content.startsWith(commands.join)) {
+    else if (msg.content.startsWith(commands.join)) {
         if (voiceChnl != undefined) {
             voiceChnl.join();
         } else {
@@ -90,8 +119,24 @@ client.on('message', msg => {
         }
         let args = msg.content.split(" ");
 
+        // Display command help
+        if (args[1] === undefined) {
+            let helptext = "```\nCommand Usage:\n\n";
+            helptext += commands.playlist + " create <playlist name> : Creates a playlist with the specified name if it doesn't exist.\n";
+            helptext += commands.playlist + " delete <playlist name> : Deletes a playlist with the specified name if it exists.\n";
+            helptext += commands.playlist + " add <playlist name> <video url> : Adds a YouTube video to the specified playlist.\n";
+            helptext += commands.playlist + " remove <playlist name> <video url> : Removes all instances of a video from the specified playlist.\n";
+            helptext += commands.playlist + " import <youtube playlist url> <new playlist name> : Imports a YouTube playlist and creates a new playlist with it.\n";
+            helptext += commands.playlist + " play <playlist name> : Plays the specified playlist in normal order.\n";
+            helptext += commands.playlist + " mix <playlist name> : Plays the specified playlist in random order.\n";
+            helptext += commands.playlist + " list : Lists all playlists on this Discord server.\n";
+            let helplineend = "```";
+            helptext += helplineend;
+            msg.channel.send(helptext);
+        }
+
         // Create new playlist
-        if (args[1] === "create") {
+        else if (args[1] === "create") {
             let playlistName = args[2];
             if (fs.existsSync(datadir + "playlists/" + playlistName + '.json')) {
                 msg.channel.send("Error: Playlist `" + playlistName + "` already exists.");
@@ -286,9 +331,19 @@ client.on('message', msg => {
             msg.channel.send("A playlist is currently downloading in the queue, please do /stop if you want to play something else at this time, or wait for the current playlist to be completely added to the queue. Videos remaining to be downloaded: " + playlistStatus.remaining);
         } else if (msg.content.length <= commands.play.length) {
             if (msg.attachments.array().length > 0) {
-                queueVideo(msg.attachments.first().url, msg, true);
+                if (msg.attachments.first().filename.endsWith(".mp3") || msg.attachments.first().filename.endsWith(".wav") || msg.attachments.first().filename.endsWith(".flac") || msg.attachments.first().filename.endsWith(".ogg")) {
+                    queueVideo(msg.attachments.first().url, msg, true, msg.attachments.first());
+                } else {
+                    msg.channel.send("I can only play mp3, wav, flac, and ogg files right now. Convert your file to one of those types and try again.");
+                }
             } else {
-                // TODO: Handle invalid command
+                let helptext = "```\nCommand Usage:\n\n";
+                helptext += commands.play + " <youtube search term> : Searches for and plays the first YouTube result.\n";
+                helptext += commands.play + " <youtube video url> : Plays the specified YouTube url.\n";
+                helptext += "\nUploading an audio file to Discord and putting " + commands.play + " in the comment will play the uploaded audio file.\n";
+                let helplineend = "```";
+                helptext += helplineend;
+                msg.channel.send(helptext);
             }
         } else {
             notifyProcessing(msg.channel);
@@ -355,6 +410,11 @@ client.on('message', msg => {
         });
     }
 
+    // Reset status (for debug purposes)
+    else if (msg.content.startsWith(commands.resetstatus)) {
+        resetSelf();
+    }
+
     // Dump song queue to file (for debug purposes)
     else if (msg.content.startsWith(commands.dumpqueue)) {
         fs.writeFile(datadir + "queuedump.json", JSON.stringify(vidQueue, "", " "), function (err) {
@@ -395,7 +455,7 @@ function playVideo(videoData) {
                     if (queueEmpty()) {
                         videoData.responseChannel.send("Queue is empty. Disconnecting.");
                         voiceChnl.leave();
-                        client.user.setActivity("");
+                        resetSelf()
                         audioPlaying = false;
                     } else {
                         let nextVideo = vidQueue.shift();
@@ -449,6 +509,7 @@ function queuePlaylist(linksarray, msg, echofull = true) {
                         queuer = msg.author.username;
                     }
                     let videoData = {
+                        "source": "YouTube Playlist",
                         "audiostream": encodedData,
                         "title": data.title,
                         "uploader": data.uploader,
@@ -475,7 +536,7 @@ function queuePlaylist(linksarray, msg, echofull = true) {
     }
 }
 
-function queueVideo(link, msg, local, sendEmbed = true) {
+function queueVideo(link, msg, local, attachmentInfo = null, sendEmbed = true) {
     let cachedir = "./cache/" + msg.guild.id + "/";
     if (!local) {
         youtubedl.getInfo(link, function (err, data) {
@@ -491,6 +552,7 @@ function queueVideo(link, msg, local, sendEmbed = true) {
                         queuer = msg.author.username;
                     }
                     let videoData = {
+                        "source": "YouTube",
                         "audiostream": encodedData,
                         "title": data.title,
                         "uploader": data.uploader,
@@ -518,32 +580,39 @@ function queueVideo(link, msg, local, sendEmbed = true) {
         console.log("Downloading audio attachment...");
         let download = request(link).pipe(fs.createWriteStream(cachedir + 'qtemp'));
         download.on('finish', function () {
-            msg.delete();
-            encodeBase64AudioStream(cachedir + 'qtemp', function (encodedData) {
-                let queuer = "";
-                if (msg.member.nickname != null) {
-                    queuer = msg.member.nickname;
-                } else {
-                    queuer = msg.author.username;
-                }
-                let videoData = {
-                    "audiostream": encodedData,
-                    "title": "Uploaded audio",
-                    "uploader": undefined,
-                    "length": undefined,
-                    "thumbnail": undefined,
-                    "url": undefined,
-                    "queuer": queuer,
-                    "queuerAvatar": msg.member.user.avatarURL,
-                    "responseChannel": msg.channel,
-                    "voiceChannel": msg.member.voiceChannel
-                }
-                if (!audioPlaying) {
-                    playVideo(videoData);
-                } else {
-                    vidQueue.push(videoData);
-                    sendQueueEmbed(videoData)
-                }
+            let musicDuration = require('music-duration');
+            let gethhmmss = require('gethhmmss');
+            let length;
+            musicDuration(cachedir + 'qtemp').then(duration => {
+                length = gethhmmss(parseInt(duration));
+                msg.delete();
+                encodeBase64AudioStream(cachedir + 'qtemp', function (encodedData) {
+                    let queuer = "";
+                    if (msg.member.nickname != null) {
+                        queuer = msg.member.nickname;
+                    } else {
+                        queuer = msg.author.username;
+                    }
+                    let videoData = {
+                        "source": "Uploaded Audio",
+                        "audiostream": encodedData,
+                        "title": attachmentInfo.filename,
+                        "uploader": queuer,
+                        "length": length,
+                        "thumbnail": undefined,
+                        "url": link,
+                        "queuer": queuer,
+                        "queuerAvatar": msg.member.user.avatarURL,
+                        "responseChannel": msg.channel,
+                        "voiceChannel": msg.member.voiceChannel
+                    }
+                    if (!audioPlaying) {
+                        playVideo(videoData);
+                    } else {
+                        vidQueue.push(videoData);
+                        sendQueueEmbed(videoData)
+                    }
+                });
             });
         });
     }
@@ -552,7 +621,7 @@ function queueVideo(link, msg, local, sendEmbed = true) {
 function sendQueueEmbed(data) {
     let embed = new Discord.RichEmbed();
     embed.setColor("#FF0000");
-    embed.setTitle("YouTube");
+    embed.setTitle(data.source);
     embed.setDescription(data.queuer + " added a video to the queue");
     embed.setThumbnail(data.thumbnail);
     embed.addField("Video", data.title);
@@ -565,7 +634,7 @@ function sendQueueEmbed(data) {
 function sendNowPlayingEmbed(data) {
     let embed = new Discord.RichEmbed();
     embed.setColor("#FF0000");
-    embed.setTitle("YouTube");
+    embed.setTitle(data.source);
     embed.setDescription("Playing video requested by " + data.queuer);
     embed.setThumbnail(data.queuerAvatar);
     embed.addField("Video", data.title);
@@ -605,9 +674,12 @@ function stopNotifyProcessing() {
     //loadingmsg.shift().delete();
 }
 
-function resetSelf(guild) {
-    client.user.setActivity("");
-    guild.members.get(client.user.id).setNickname("Coda");
+function resetSelf() {
+    if (config.devMode) {
+        client.user.setActivity("Development Mode");
+    } else {
+        client.user.setActivity(statuses[Math.floor((Math.random() * statuses.length))]);
+    }
 }
 
 client.login(apis.discord);
