@@ -1,6 +1,7 @@
 {
     "cmdprefix": "/",
-    "devMode": false,
+    "devMode": true,
+    "loglevel": 0,
     "audioVolume": 0.5,
     "maxQueueSize": 15
 }

@@ -1,3 +1,20 @@
+const chalk = require('chalk');
+const logger = require('loglevel');
+const prefix = require('loglevel-plugin-prefix');
+const colors = {
+    TRACE: chalk.magenta,
+    DEBUG: chalk.cyan,
+    INFO: chalk.blue,
+    WARN: chalk.yellow,
+    ERROR: chalk.red
+}
+prefix.reg(logger);
+logger.enableAll();
+prefix.apply(logger, {
+    format(level, name, timestamp) {
+        return `${chalk.gray(`[${timestamp}]`)} ${colors[level.toUpperCase()](level + ":")}`;
+    },
+});
 const Discord = require('discord.js');
 const youtubedl = require('youtube-dl');
 const ytsearch = require('youtube-search');
@@ -50,9 +67,9 @@ client.on('ready', () => {
         statuses = data.toString().split("\n");
         resetSelf();
     });
-    console.log('Logged in');
+    log('Logged in');
     if (config.devMode) {
-        console.log("Bot running in development mode!");
+        log('Bot running in development mode!', 'warn');
         client.user.setStatus('dnd');
     }
     let guilds = client.guilds.keyArray();
@@ -62,9 +79,11 @@ client.on('ready', () => {
     guilds.forEach(function (item, index) {
         if (!fs.existsSync('./data/' + item)) {
             fs.mkdirSync('./data/' + item);
+            log('Created data folder for guild ' + item, 'debug');
         }
         if (!fs.existsSync('./cache/' + item)) {
             fs.mkdirSync('./cache/' + item);
+            log('Created cache folder for guild ' + item, 'debug');
         }
     });
 });
@@ -80,8 +99,8 @@ client.on('message', msg => {
 
     let voiceChnl = msg.member.voiceChannel;
 
-    if (msg.content.startsWith(config.cmdprefix) && config.devMode) {
-        msg.reply("The bot is currently in development mode. Some things may or may not break.");
+    if (msg.content.startsWith(config.cmdprefix)) {
+        log(`${chalk.gray(`(${msg.guild.id})`)} Command ${chalk.bgCyan(chalk.black(msg.content))} executed by user ${chalk.bgGreen(chalk.black(`${msg.member.user.tag} (${msg.member.user.id})`))}`, 'debug');
     }
 
     // Help information
@@ -148,7 +167,7 @@ client.on('message', msg => {
                 }
                 fs.writeFile(datadir + "playlists/" + playlistName + ".json", JSON.stringify(playlistinfo, "", " "), (err) => {
                     if (err) throw err;
-                    console.log("Playlist " + playlistName + " created.");
+                    log(`${chalk.gray(`(${msg.guild.id})`)} Playlist ${chalk.cyan(playlistName)} created.`);
                     msg.channel.send("Playlist `" + playlistName + "` successfully created. Add things to it with " + config.cmdprefix + "playlist add " + playlistName + " `video url`");
                 });
             }
@@ -162,7 +181,7 @@ client.on('message', msg => {
             } else {
                 fs.unlink(datadir + "playlists/" + playlistName + '.json', (err) => {
                     if (err) throw err;
-                    console.log("Deleted playlist " + playlistName);
+                    log(`${chalk.gray(`(${msg.guild.id})`)} Deleted playlist ${chalk.cyan(playlistName)}.`);
                     msg.channel.send("Playlist `" + playlistName + "` was successfully deleted.");
                 })
             }
@@ -187,7 +206,7 @@ client.on('message', msg => {
                         requestedPlaylist.size = size;
                         fs.writeFile(datadir + "playlists/" + playlistName + '.json', JSON.stringify(requestedPlaylist, "", " "), (err) => {
                             if (err) throw err;
-                            console.log(msg.author.id + " added " + videoUrl + " to playlist " + playlistName);
+                            log(`${chalk.bgGreen(chalk.black(msg.author.tag))} added ${chalk.yellow(videoUrl)} to the ${chalk.red(playlistName)} playlist.`);
                             msg.channel.send(msg.author.username + " added " + videoUrl + " to the `" + playlistName + "` playlist.");
                         });
                     });
@@ -222,7 +241,7 @@ client.on('message', msg => {
                         requestedPlaylist.size = newsize;
                         fs.writeFile(datadir + "playlists/" + playlistName + '.json', JSON.stringify(requestedPlaylist, "", " "), (err) => {
                             if (err) throw err;
-                            console.log(msg.author.id + " removed " + videoUrl + " from playlist " + playlistName);
+                            log(`${chalk.gray(`(${msg.guild.id})`)} ${chalk.bgGreen(chalk.black(msg.author.tag))} removed ${chalk.yellow(videoUrl)} from the ${chalk.red(playlistName)} playlist.`);
                             msg.channel.send(msg.author.username + " removed " + videoUrl + " from the `" + playlistName + "` playlist.");
                         });
                     });
@@ -242,7 +261,7 @@ client.on('message', msg => {
             } else {
                 let youtube = new YouTube(apis.youtube);
                 youtube.getPlaylist(playlistUrl).then(playlist => {
-                    console.log('Importing playlist...');
+                    log(`${chalk.gray(`(${msg.guild.id})`)} Importing playlist...`);
                     notifyProcessing(msg.channel, "Importing playlist...");
                     playlist.getVideos().then(videos => {
                         let links = [];
@@ -258,7 +277,7 @@ client.on('message', msg => {
                         }
                         fs.writeFile(datadir + "playlists/" + playlistName + '.json', JSON.stringify(playlistinfo, "", " "), (err) => {
                             if (err) throw err;
-                            console.log("Playlist imported");
+                            log(`${chalk.gray(`(${msg.guild.id})`)} Playlist imported`);
                             stopNotifyProcessing();
                             let embed = new Discord.RichEmbed();
                             embed.setColor("#FF0000");
@@ -268,7 +287,7 @@ client.on('message', msg => {
                             msg.channel.send(embed);
                         });
                     }).catch(err => {
-                        console.log(err);
+                        log(err, 'err');
                     });
                 });
             }
@@ -307,7 +326,7 @@ client.on('message', msg => {
         // List playlists
         else if (args[1] === "list") {
             fs.readdir(datadir + "playlists", function (err, files) {
-                if (err) console.log(err);
+                if (err) log(err, 'err');
                 let playlists = [];
                 files.forEach(function (file) {
                     let name = file.replace('.json', '');
@@ -394,7 +413,7 @@ client.on('message', msg => {
 
     // Shutdown bot
     else if (msg.content.startsWith(commands.shutdown)) {
-        console.log("Shutdown request received.");
+        log("Shutdown request received.");
         resetSelf(msg.guild);
         msg.channel.send("Goodbye! Miss you already! :heart:");
         client.destroy();
@@ -402,7 +421,7 @@ client.on('message', msg => {
 
     // Restart bot
     else if (msg.content.startsWith(commands.restart)) {
-        console.log("Restart request received.");
+        log("Restart request received.");
         msg.channel.send("Restarting...");
         client.destroy().then(status => {
             client.login(apis.discord);
@@ -422,15 +441,15 @@ client.on('message', msg => {
     }
 
     // Delete messages containing commands
-    // if (msg.content.startsWith(config.cmdprefix) && msg.attachments.array().length == 0) {
-    //     msg.delete().then(msg => {}).catch(console.error);
-    // }
+    if (msg.content.startsWith(config.cmdprefix) && msg.attachments.array().length == 0) {
+        msg.delete().then(msg => {}).catch(console.error);
+    }
 });
 
 function searchYoutube(query, msg, cb) {
-    console.log("YouTube search query was '" + query + "'");
+    log(`${chalk.gray(`(${msg.guild.id})`)} YouTube search query was ${chalk.yellow(query)}`);
     ytsearch(query, ytsearchopts, function (err, results) {
-        if (err) return console.log(err);
+        if (err) return log(err, 'err');
         cb(results[0].link);
     })
 }
@@ -441,7 +460,7 @@ function playVideo(videoData) {
         voiceChnl.join().then(connection => {
             audioPlaying = true;
             sendNowPlayingEmbed(videoData);
-            decodeBase64AudioStream(videoData.audiostream, function (decodedData) {
+            decodeBase64AudioStream(videoData.audiostream, videoData.msg, function (decodedData) {
                 dispatcher = connection.playStream(decodedData, {
                     volume: config.audioVolume
                 });
@@ -476,7 +495,7 @@ function queuePlaylist(linksarray, msg, echofull = true) {
     if (linksarray.length == 0 && !stopRequest) {
         playlistStatus.downloading = false;
         playlistStatus.remaining = 0;
-        console.log("All playlist videos have been loaded into RAM.");
+        log(`${chalk.gray(`(${msg.guild.id})`)} All playlist videos have been loaded.`);
     } else if (stopRequest) {
         linksarray = [];
         playlistStatus.downloading = false;
@@ -485,7 +504,7 @@ function queuePlaylist(linksarray, msg, echofull = true) {
 
     // If the queue is full, wait 15 seconds to see if a slot frees up, then try again
     else if (vidQueue.length >= config.maxQueueSize) {
-        if (echofull) console.log("Queue is full, checking every 5 seconds for a free slot.");
+        if (echofull) log(`${chalk.gray(`(${msg.guild.id})`)} Queue is full, checking every 5 seconds for a free slot.`);
         setTimeout(queuePlaylist, 5000, linksarray, msg, false);
     }
 
@@ -493,14 +512,14 @@ function queuePlaylist(linksarray, msg, echofull = true) {
     else {
         playlistStatus.downloading = true;
         playlistStatus.remaining = linksarray.length;
-        console.log("Downloading next playlist video... (" + linksarray.length + " videos left)");
+        log(`${chalk.gray(`(${msg.guild.id})`)} Downloading next playlist video... (${linksarray.length} videos left)`);
         let currentvid = linksarray.shift();
         youtubedl.getInfo(currentvid, function (err, data) {
             let video = youtubedl(currentvid);
             video.pipe(fs.createWriteStream(cachedir + 'qtemp'));
             video.on('end', function () {
-                console.log("Video download complete!");
-                encodeBase64AudioStream(cachedir + 'qtemp', function (encodedData) {
+                log(`${chalk.gray(`(${msg.guild.id})`)} Video download complete!`);
+                encodeBase64AudioStream(cachedir + 'qtemp', msg, function (encodedData) {
                     let queuer = "";
                     if (msg.member.nickname != null) {
                         queuer = msg.member.nickname;
@@ -516,6 +535,7 @@ function queuePlaylist(linksarray, msg, echofull = true) {
                         "thumbnail": data.thumbnail,
                         "url": data.webpage_url,
                         "queuer": queuer,
+                        "msg": msg,
                         "queuerAvatar": msg.member.user.avatarURL,
                         "responseChannel": msg.channel,
                         "voiceChannel": msg.member.voiceChannel
@@ -542,8 +562,8 @@ function queueVideo(link, msg, local, attachmentInfo = null, sendEmbed = true) {
             let video = youtubedl(link);
             video.pipe(fs.createWriteStream(cachedir + 'qtemp'));
             video.on('end', function () {
-                console.log("Video download complete!");
-                encodeBase64AudioStream(cachedir + 'qtemp', function (encodedData) {
+                log(`${chalk.gray(`(${msg.guild.id})`)} Video download complete!`);
+                encodeBase64AudioStream(cachedir + 'qtemp', msg, function (encodedData) {
                     let queuer = "";
                     if (msg.member.nickname != null) {
                         queuer = msg.member.nickname;
@@ -559,13 +579,14 @@ function queueVideo(link, msg, local, attachmentInfo = null, sendEmbed = true) {
                         "thumbnail": data.thumbnail,
                         "url": data.webpage_url,
                         "queuer": queuer,
+                        "msg": msg,
                         "queuerAvatar": msg.member.user.avatarURL,
                         "responseChannel": msg.channel,
                         "voiceChannel": msg.member.voiceChannel
                     }
                     stopNotifyProcessing();
                     if (!audioPlaying) {
-                        playVideo(videoData);
+                        playVideo(videoData, msg);
                     } else {
                         vidQueue.push(videoData);
                         if (sendEmbed) {
@@ -576,7 +597,7 @@ function queueVideo(link, msg, local, attachmentInfo = null, sendEmbed = true) {
             });
         });
     } else {
-        console.log("Downloading audio attachment...");
+        log(`${chalk.gray(`(${msg.guild.id})`)} Downloading audio attachment...`);
         let download = request(link).pipe(fs.createWriteStream(cachedir + 'qtemp'));
         download.on('finish', function () {
             let musicDuration = require('music-duration');
@@ -585,7 +606,7 @@ function queueVideo(link, msg, local, attachmentInfo = null, sendEmbed = true) {
             musicDuration(cachedir + 'qtemp').then(duration => {
                 length = gethhmmss(parseInt(duration));
                 msg.delete();
-                encodeBase64AudioStream(cachedir + 'qtemp', function (encodedData) {
+                encodeBase64AudioStream(cachedir + 'qtemp', msg, function (encodedData) {
                     let queuer = "";
                     if (msg.member.nickname != null) {
                         queuer = msg.member.nickname;
@@ -601,12 +622,13 @@ function queueVideo(link, msg, local, attachmentInfo = null, sendEmbed = true) {
                         "thumbnail": undefined,
                         "url": link,
                         "queuer": queuer,
+                        "msg": msg,
                         "queuerAvatar": msg.member.user.avatarURL,
                         "responseChannel": msg.channel,
                         "voiceChannel": msg.member.voiceChannel
                     }
                     if (!audioPlaying) {
-                        playVideo(videoData);
+                        playVideo(videoData, msg);
                     } else {
                         vidQueue.push(videoData);
                         sendQueueEmbed(videoData)
@@ -644,8 +666,8 @@ function sendNowPlayingEmbed(data) {
     data.responseChannel.send(embed);
 }
 
-function encodeBase64AudioStream(audioFilePath, cb) {
-    console.log("Encoding audio to base64...");
+function encodeBase64AudioStream(audioFilePath, msg, cb) {
+    log(`${chalk.gray(`(${msg.guild.id})`)} Encoding audio to base64...`);
     fs.readFile(audioFilePath, function (err, data) {
         let binaryData = data;
         let base64Data = Buffer.from(binaryData, 'binary').toString('base64');
@@ -653,8 +675,8 @@ function encodeBase64AudioStream(audioFilePath, cb) {
     });
 }
 
-function decodeBase64AudioStream(base64AudioStream, cb) {
-    console.log("Decoding base64 audio stream...");
+function decodeBase64AudioStream(base64AudioStream, msg, cb) {
+    log(`${chalk.gray(`(${msg.guild.id})`)} Decoding base64 audio stream...`);
     let base64Data = base64AudioStream;
     let binaryData = Buffer.from(base64Data, 'base64');
     const Readable = require('stream').Readable;
@@ -678,6 +700,24 @@ function resetSelf() {
         client.user.setActivity("Development Mode");
     } else {
         client.user.setActivity(statuses[Math.floor((Math.random() * statuses.length))]);
+    }
+}
+
+function log(message, loglevel = 'info') {
+    if (loglevel.toLowerCase() === 'debug' && (config.devMode || config.loglevel === 0)) {
+        logger.debug(message);
+    } else {
+        switch (loglevel.toLowerCase()) {
+            case 'info':
+                logger.info(message);
+                break;
+            case 'warn':
+                logger.warn(message);
+                break;
+            case 'err':
+                logger.error(message);
+                break;
+        }
     }
 }
 
